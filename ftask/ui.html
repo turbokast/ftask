@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="csrf-token" content="__CSRF__">
+<title>ftask</title>
+<link rel="icon" href="data:,">
+<style nonce="__NONCE__">
+:root {
+  --bg: #f3f4f7; --card: #ffffff; --text: #14181f; --muted: #4a5568; --line: #d5dae3;
+  --ctl: #5b6678; --accent: #1d4ed8; --on-accent: #ffffff; --focus: #1d4ed8;
+  --code-bg: #eef1f6; --warn-bg: #fff4d6; --warn-text: #5c3d00; --warn-line: #b7791f;
+  --ok: #0f6b3a; --danger: #b42318; --chip-bg: #e7ebf2; --shadow: 0 1px 2px rgba(20,24,31,.08);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116; --card: #171c24; --text: #e8ecf3; --muted: #a6b0c0; --line: #2d3541;
+    --ctl: #8793a6; --accent: #8ab4ff; --on-accent: #0b1220; --focus: #8ab4ff;
+    --code-bg: #0d1117; --warn-bg: #3a2a08; --warn-text: #ffe3a3; --warn-line: #d19a2a;
+    --ok: #6ee7a0; --danger: #ff9a90; --chip-bg: #252c38; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.skip { position: absolute; left: 8px; top: -60px; background: var(--card); color: var(--text); padding: 10px 14px; border: 2px solid var(--accent); border-radius: 6px; z-index: 10; }
+.skip:focus { top: 8px; }
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+header.top { padding: 18px 0 8px; }
+.top-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 1.5rem; margin: 0; letter-spacing: -.01em; }
+.conn { font-size: .9rem; color: var(--warn-text); background: var(--warn-bg); border: 1px solid var(--warn-line); padding: 2px 10px; border-radius: 999px; }
+.conn:empty { display: none; }
+nav.views { display: flex; gap: 4px; margin: 12px 0 0; border-bottom: 2px solid var(--line); flex-wrap: wrap; }
+nav.views a {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 14px; color: var(--text);
+  text-decoration: none; font-weight: 600; border-bottom: 4px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
+}
+nav.views a:hover { background: var(--chip-bg); }
+nav.views a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--accent); }
+.count { font-weight: 600; font-size: .85rem; min-width: 24px; text-align: center; padding: 0 8px; border-radius: 999px; background: var(--chip-bg); color: var(--text); }
+.chips { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 16px 0 4px; }
+.chip-btn {
+  min-height: 32px; padding: 3px 12px; font: inherit; font-size: .92rem; cursor: pointer; color: var(--text);
+  background: var(--card); border: 1px solid var(--ctl); border-radius: 999px; display: inline-flex; gap: 6px; align-items: center;
+}
+.chip-btn:hover { background: var(--chip-bg); }
+.chip-btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.chip-btn .n { font-weight: 700; }
+h2.list-h { font-size: 1.05rem; margin: 18px 0 10px; color: var(--muted); font-weight: 600; }
+h2.list-h:focus { outline: none; }
+#list { display: flex; flex-direction: column; gap: 14px; padding-bottom: 56px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); min-width: 0; }
+.card.status-done, .card.status-cancelled { opacity: .92; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.pchip { display: inline-flex; align-items: center; gap: 7px; background: var(--chip-bg); border-radius: 999px; padding: 2px 12px 2px 9px; font-size: .88rem; font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
+.pchip .dot { width: 10px; height: 10px; border-radius: 50%; background: hsl(var(--hue, 220) 65% 48%); flex: none; }
+.badges { display: inline-flex; gap: 8px; flex-wrap: wrap; font-size: .88rem; color: var(--muted); }
+.badge { border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; }
+.badge.st { font-weight: 700; color: var(--text); }
+h3.title { font-size: 1.2rem; line-height: 1.3; margin: 10px 0 4px; overflow-wrap: anywhere; }
+h3.title:focus { outline: none; }
+.why { margin: 4px 0 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.banner { margin: 8px 0; padding: 8px 12px; border-left: 5px solid var(--warn-line); background: var(--warn-bg); color: var(--warn-text); border-radius: 6px; overflow-wrap: anywhere; }
+.banner b { font-weight: 700; }
+ol.steps { list-style: none; counter-reset: step; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+ol.steps > li { min-width: 0; counter-increment: step; }
+.step-main { display: grid; grid-template-columns: 1.9rem 24px minmax(0, 1fr); column-gap: 10px; align-items: start; }
+.step-main::before { content: counter(step) "."; font-weight: 700; color: var(--muted); text-align: right; line-height: 26px; }
+.step-main input[type=checkbox] { grid-column: 2; width: 24px; height: 24px; margin: 1px 0 0; accent-color: var(--accent); cursor: pointer; }
+.step-text { grid-column: 3; cursor: pointer; overflow-wrap: anywhere; min-width: 0; line-height: 26px; }
+li.is-done .step-text { color: var(--muted); text-decoration: line-through; }
+.step-link { margin: 6px 0 0 calc(1.9rem + 10px); overflow-wrap: anywhere; word-break: break-word; }
+.step-link a { color: var(--accent); text-underline-offset: 3px; display: inline-block; min-height: 24px; }
+.value { margin: 8px 0 0 calc(1.9rem + 10px); display: flex; gap: 8px; align-items: flex-start; }
+.value pre {
+  flex: 1; min-width: 0; margin: 0; padding: 9px 12px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+  font: .92rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; user-select: all;
+}
+.btn {
+  min-height: 40px; min-width: 24px; padding: 6px 16px; font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px;
+  color: var(--text); background: var(--card); border: 1px solid var(--ctl);
+}
+.btn:hover { background: var(--chip-bg); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.quiet { border-color: transparent; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-weight: 500; }
+.btn[disabled] { opacity: .6; cursor: progress; }
+.btn.copy { flex: none; }
+.note { margin-top: 14px; }
+.note label { display: block; font-weight: 600; margin-bottom: 4px; }
+.note textarea {
+  display: block; width: 100%; min-height: 5.2rem; padding: 9px 12px; font: inherit; color: var(--text); background: var(--card);
+  border: 1px solid var(--ctl); border-radius: 8px; resize: vertical;
+}
+.note-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .88rem; color: var(--muted); min-height: 24px; margin-top: 2px; }
+.save-state.ok { color: var(--ok); font-weight: 600; }
+.save-state.err { color: var(--danger); font-weight: 600; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+.foot { margin: 12px 0 0; font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.foot code { font: .85rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.empty { padding: 36px 8px; text-align: center; color: var(--muted); font-size: 1.05rem; }
+.files-sec { margin: 14px 0 0; }
+.files-sec > h4 { font-size: 1rem; margin: 0 0 6px; }
+.ask { margin: 0 0 8px; padding: 8px 12px; border-left: 5px solid var(--accent); background: var(--chip-bg); border-radius: 6px; overflow-wrap: anywhere; }
+.attach { margin: 8px 0 0 calc(1.9rem + 10px); min-width: 0; }
+.files-sec .attach { margin-left: 0; }
+.dz { border: 2px dashed var(--ctl); border-radius: 10px; padding: 10px 12px; display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; }
+.dz.over { border-color: var(--accent); background: var(--chip-bg); border-style: solid; }
+.dz-text { flex: 1 1 14rem; min-width: 0; color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+.dz-text b { color: var(--text); }
+.flist, .ups { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.flist:empty, .ups:empty { display: none; }
+.frow, .uprow { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; background: var(--card); }
+.fhead { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.fname { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.fmeta { color: var(--muted); font-size: .86rem; }
+.fdir { display: inline-block; font-size: .78rem; font-weight: 700; padding: 0 8px; border-radius: 999px; border: 1px solid var(--ctl); color: var(--muted); }
+.flabel { margin: 2px 0 0; font-size: .92rem; overflow-wrap: anywhere; }
+.fact { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.fact a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+.btn.small { min-height: 36px; padding: 3px 12px; font-size: .92rem; }
+.fpath { margin: 6px 0 0; display: flex; gap: 8px; align-items: flex-start; }
+.fpath pre { flex: 1; min-width: 0; margin: 0; padding: 6px 10px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; font: .85rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; user-select: all; }
+.uprow progress { width: 100%; height: 12px; margin-top: 6px; accent-color: var(--accent); }
+.uprow .err { color: var(--danger); font-weight: 600; margin: 4px 0 0; overflow-wrap: anywhere; }
+.toast {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; max-width: min(92vw, 560px);
+  background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 10px; font-weight: 600; box-shadow: 0 4px 18px rgba(0,0,0,.3);
+}
+.toast[hidden] { display: none; }
+@media (max-width: 520px) {
+  .wrap { padding: 0 10px; }
+  .card { padding: 14px 12px; border-radius: 10px; }
+  .step-link, .value { margin-left: calc(1.6rem + 8px); }
+  .value, .fpath { flex-direction: column; }
+  .attach { margin-left: calc(1.6rem + 8px); }
+  .fpath .btn { align-self: flex-start; }
+  .dz .btn { flex: 1 1 100%; }
+  .value .btn { align-self: flex-start; }
+  .actions .btn.primary { flex: 1 1 100%; }
+  .step-main { grid-template-columns: 1.6rem 24px minmax(0, 1fr); column-gap: 8px; }
+}
+@media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } }
+@media (forced-colors: active) { .chip-btn[aria-pressed="true"], .btn.primary { outline: 2px solid; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to tasks</a>
+<div class="wrap">
+  <header class="top">
+    <div class="top-row">
+      <h1>ftask</h1>
+      <span id="conn" class="conn" role="status"></span>
+    </div>
+    <nav class="views" aria-label="Views">
+      <a href="#view=todo" id="tab-todo">To do <span class="count" id="cnt-todo">0</span></a>
+      <a href="#view=waiting" id="tab-waiting">Waiting <span class="count" id="cnt-waiting">0</span></a>
+      <a href="#view=done" id="tab-done">Done <span class="count" id="cnt-done">0</span></a>
+    </nav>
+  </header>
+  <main id="main" tabindex="-1">
+    <h2 class="sr" id="chips-h">Filter by project</h2>
+    <ul class="chips" id="chips" aria-labelledby="chips-h"></ul>
+    <h2 class="list-h" id="list-h" tabindex="-1">To do</h2>
+    <div id="list"></div>
+    <p class="empty" id="empty" hidden></p>
+  </main>
+</div>
+<div class="sr" id="live" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script nonce="__NONCE__">
+(() => {
+'use strict';
+
+const VIEWS = {
+  todo:    { label: 'To do',   statuses: ['open'],                empty: 'Nothing to do right now.' },
+  waiting: { label: 'Waiting', statuses: ['waiting'],             empty: 'Nothing is waiting on anyone.' },
+  done:    { label: 'Done',    statuses: ['done', 'cancelled'],   empty: 'Nothing completed yet.' },
+};
+const state = { tasks: [], counts: {}, version: null, loaded: false, token: document.querySelector('meta[name=csrf-token]').content };
+const $list = document.getElementById('list');
+const $chips = document.getElementById('chips');
+const $empty = document.getElementById('empty');
+const $live = document.getElementById('live');
+const $conn = document.getElementById('conn');
+const $listH = document.getElementById('list-h');
+
+// ---------- helpers ----------
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'dataset') Object.assign(el.dataset, v);
+    else el.setAttribute(k, v === true ? '' : String(v));
+  }
+  for (const kid of kids.flat(Infinity)) {
+    if (kid == null || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+let liveTimer = null;
+function announce(msg) {
+  clearTimeout(liveTimer);
+  $live.textContent = '';
+  liveTimer = setTimeout(() => { $live.textContent = msg; }, 60);
+}
+function ago(iso) {
+  if (!iso) return '';
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60); if (m < 60) return m + ' min ago';
+  const hr = Math.round(m / 60); if (hr < 36) return hr + (hr === 1 ? ' hour ago' : ' hours ago');
+  const d = Math.round(hr / 24); if (d < 45) return d + ' days ago';
+  return new Date(iso).toLocaleDateString();
+}
+function timeEl(iso) {
+  return h('time', { datetime: iso, title: new Date(iso).toLocaleString() }, ago(iso));
+}
+function hue(str) { let x = 0; for (const c of str) x = (x * 31 + c.charCodeAt(0)) % 360; return x; }
+function safeUrl(u) { return /^(https?:\/\/|mailto:)\S+$/i.test(u) ? u : null; }
+function structSig(t) {
+  return JSON.stringify([t.key, t.project, t.title, t.why, t.minutes, t.priority, t.status, t.waiting_on, t.steps, t.created_by, t.created_at, t.done_at, t.upload, t.accept, t.upload_label]);
+}
+
+// ---------- API ----------
+async function api(path, body) {
+  const doFetch = () => fetch(path, body === undefined
+    ? { cache: 'no-store' }
+    : { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': state.token }, body: JSON.stringify(body) });
+  let r = await doFetch();
+  if (r.status === 403 && body !== undefined) {           // server restarted: token changed
+    const t = await fetch('/api/csrf', { cache: 'no-store' });
+    if (t.ok) { state.token = (await t.json()).token; r = await doFetch(); }
+  }
+  let data = null;
+  try { data = await r.json(); } catch (e) { /* non-JSON */ }
+  if (!r.ok) throw new Error((data && data.error) || ('HTTP ' + r.status));
+  return data;
+}
+
+async function load() {
+  const snap = await api('/api/tasks');
+  state.tasks = snap.tasks; state.counts = snap.counts; state.version = snap.version; state.loaded = true;
+  render();
+}
+async function poll() {
+  try {
+    const v = await api('/api/version');
+    setConn(true);
+    if (v.version !== state.version) await load();
+  } catch (e) { setConn(false); }
+}
+let wasOffline = false;
+function setConn(ok) {
+  if (ok) { if (wasOffline) announce('Reconnected'); $conn.textContent = ''; wasOffline = false; }
+  else { wasOffline = true; $conn.textContent = 'Offline, retrying'; }
+}
+
+// ---------- routing ----------
+function route() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const view = VIEWS[p.get('view')] ? p.get('view') : 'todo';
+  return { view, project: p.get('project') || '' };
+}
+function hashFor(view, project) {
+  const p = new URLSearchParams({ view });
+  if (project) p.set('project', project);
+  return '#' + p.toString();
+}
+
+// ---------- rendering ----------
+function sumCounts(statuses, project) {
+  let n = 0;
+  for (const [proj, c] of Object.entries(state.counts)) {
+    if (project && proj.toLowerCase() !== project.toLowerCase()) continue;
+    for (const s of statuses) n += c[s] || 0;
+  }
+  return n;
+}
+function renderChrome(r) {
+  for (const [name, v] of Object.entries(VIEWS)) {
+    const a = document.getElementById('tab-' + name);
+    a.href = hashFor(name, r.project);
+    if (name === r.view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    document.getElementById('cnt-' + name).textContent = sumCounts(v.statuses, '');
+  }
+  const total = sumCounts(VIEWS.todo.statuses, '');
+  document.title = (total ? '(' + total + ') ' : '') + 'ftask';
+  // chips
+  const focusedProject = document.activeElement && $chips.contains(document.activeElement) ? document.activeElement.dataset.project : null;
+  const view = VIEWS[r.view];
+  const projects = Object.keys(state.counts).filter(p => sumCounts(view.statuses, p) > 0);
+  if (r.project && !projects.some(p => p.toLowerCase() === r.project.toLowerCase())) projects.push(r.project);
+  projects.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const mk = (label, project, n) => {
+    const pressed = project.toLowerCase() === r.project.toLowerCase();
+    const b = h('button', { type: 'button', class: 'chip-btn', 'aria-pressed': pressed ? 'true' : 'false', dataset: { project } },
+      label, ' ', h('span', { class: 'n' }, String(n)));
+    b.setAttribute('aria-label', label + ', ' + n + (n === 1 ? ' task' : ' tasks'));
+    b.addEventListener('click', () => { location.hash = hashFor(r.view, project); });
+    return h('li', null, b);
+  };
+  const items = [mk('All', '', sumCounts(view.statuses, ''))];
+  for (const p of projects) items.push(mk(p, p, sumCounts(view.statuses, p)));
+  $chips.replaceChildren(...items);
+  if (focusedProject !== null) {
+    const again = [...$chips.querySelectorAll('button')].find(b => b.dataset.project === focusedProject);
+    if (again) again.focus();
+  }
+  $listH.textContent = view.label + (r.project ? ' – ' + r.project : '');
+}
+
+function visibleTasks(r) {
+  const view = VIEWS[r.view];
+  const ts = state.tasks.filter(t => view.statuses.includes(t.status) &&
+    (!r.project || t.project.toLowerCase() === r.project.toLowerCase()));
+  if (r.view === 'done') ts.sort((a, b) => (b.done_at || b.updated_at).localeCompare(a.done_at || a.updated_at));
+  else ts.sort((a, b) => a.priority - b.priority || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  return ts;
+}
+
+function render() {
+  if (!state.loaded) return;
+  const r = route();
+  renderChrome(r);
+  const ts = visibleTasks(r);
+  const existing = new Map([...$list.children].map(c => [c.dataset.id, c]));
+  const keep = new Set(ts.map(t => t.id));
+  for (const [id, el] of existing) if (!keep.has(id)) { el.remove(); existing.delete(id); }
+  ts.forEach((t, idx) => {
+    let el = existing.get(t.id);
+    if (!el) el = buildCard(t);
+    else {
+      if (el.dataset.sig !== structSig(t)) {
+        if (isBusy(el)) { patchCard(el, t); }          // don't yank the card from under the user; retry later
+        else { const n = buildCard(t); el.replaceWith(n); el = n; }
+      } else patchCard(el, t);
+    }
+    const cur = $list.children[idx];
+    if (cur !== el) $list.insertBefore(el, cur || null);
+  });
+  $empty.hidden = ts.length > 0;
+  if (!ts.length) $empty.textContent = r.project ? VIEWS[r.view].empty.replace(/\.$/, '') + ' for ' + r.project + '.' : VIEWS[r.view].empty;
+}
+
+function isBusy(card) {
+  const ta = card.querySelector('textarea');
+  return card.contains(document.activeElement) || (ta && ta.value !== ta.dataset.saved) || +(card.dataset.uploading || 0) > 0;
+}
+
+function patchCard(card, t) {
+  card.querySelectorAll('input[data-index]').forEach(cb => {
+    if (cb.dataset.busy) return;
+    const want = t.steps_done.includes(+cb.dataset.index);
+    if (cb.checked !== want) { cb.checked = want; cb.closest('li').classList.toggle('is-done', want); }
+  });
+  patchFiles(card, t);
+  const prog = card.querySelector('.progress');
+  if (prog) prog.textContent = t.steps_done.length + ' of ' + t.steps.length + (t.steps.length === 1 ? ' step' : ' steps');
+  const ta = card.querySelector('textarea');
+  if (ta && document.activeElement !== ta && ta.value === ta.dataset.saved && t.note !== ta.dataset.saved) {
+    ta.value = t.note; ta.dataset.saved = t.note;
+  }
+}
+
+function linkEl(url) {
+  const safe = safeUrl(url);
+  if (!safe) return h('p', { class: 'step-link' }, url);
+  return h('p', { class: 'step-link' },
+    h('a', { href: safe, target: '_blank', rel: 'noopener noreferrer' }, url, h('span', { class: 'sr' }, ' (opens in a new tab)')));
+}
+
+async function copyText(text, pre) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+  } catch (e) { /* fall through */ }
+  const sel = window.getSelection(); const range = document.createRange();
+  range.selectNodeContents(pre); sel.removeAllRanges(); sel.addRange(range);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  return ok;                                              // on failure the text stays selected for Ctrl+C
+}
+
+function valueBlock(text, n) {
+  const pre = h('pre', null, h('code', null, text));
+  const btn = h('button', { type: 'button', class: 'btn copy', 'aria-label': 'Copy value for step ' + n }, 'Copy');
+  btn.addEventListener('click', async () => {
+    const ok = await copyText(text, pre);
+    btn.textContent = ok ? 'Copied' : 'Press Ctrl+C';
+    announce(ok ? 'Copied value for step ' + n : 'Could not copy automatically; the text is selected, press Control C');
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2200);
+  });
+  return h('div', { class: 'value' }, pre, btn);
+}
+
+// ---------- files ----------
+const $toast = document.getElementById('toast');
+let toastTimer = null;
+function toast(msg) {
+  clearTimeout(toastTimer);
+  $toast.hidden = false; $toast.textContent = '';
+  setTimeout(() => { $toast.textContent = msg; }, 30);      // re-insert text so screen readers announce it
+  toastTimer = setTimeout(() => { $toast.hidden = true; }, 7000);
+}
+function fmtSize(n) {
+  if (n < 1000) return n + ' B';
+  const u = ['KB', 'MB', 'GB', 'TB']; let i = -1;
+  do { n /= 1000; i++; } while (n >= 1000 && i < u.length - 1);
+  return (n >= 100 ? n.toFixed(0) : n.toFixed(1)) + ' ' + u[i];
+}
+function filesFor(t, i) {
+  return i == null ? t.files.filter(f => f.step_index == null || f.step_index >= t.steps.length)
+                   : t.files.filter(f => f.step_index === i);
+}
+function matchesAccept(file, accept) {
+  if (!accept) return true;
+  const name = file.name.toLowerCase(), type = (file.type || '').toLowerCase();
+  return accept.split(',').map(x => x.trim().toLowerCase()).filter(Boolean).some(a =>
+    a.startsWith('.') ? name.endsWith(a) : a.endsWith('/*') ? type.startsWith(a.slice(0, -1)) : type === a);
+}
+
+function fileRow(f, t) {
+  const li = h('li', { class: 'frow', dataset: { fid: f.id } });
+  const fromAgent = f.direction === 'agent';
+  li.append(h('div', { class: 'fhead' },
+    h('span', { class: 'fname' }, f.name),
+    h('span', { class: 'fmeta' }, fmtSize(f.size) + ' · ', timeEl(f.created_at)),
+    h('span', { class: 'fdir' }, fromAgent ? 'From the agent' : 'Your upload')));
+  if (f.label) li.append(h('p', { class: 'flabel' }, f.label));
+  const act = h('div', { class: 'fact' });
+  const dl = h('a', { class: 'btn small', href: '/api/files/' + f.id + '/download', download: f.name }, 'Download',
+    h('span', { class: 'sr' }, ' ' + f.name));
+  act.append(dl);
+  if (!fromAgent) {
+    const rm = h('button', { type: 'button', class: 'btn small quiet', 'aria-label': 'Remove ' + f.name }, 'Remove');
+    rm.addEventListener('click', async () => {
+      if (!window.confirm('Remove ' + f.name + '? The agent will no longer see it.')) return;
+      rm.disabled = true;
+      const zone = li.closest('.attach');
+      try {
+        await api('/api/files/' + f.id + '/remove', {});
+        toast('Removed ' + f.name);
+        await load();
+        const again = zone && zone.isConnected && zone.querySelector('.pick');
+        if (again) again.focus();
+      } catch (e) { rm.disabled = false; toast('Could not remove: ' + e.message); }
+    });
+    act.append(rm);
+  }
+  li.append(act);
+  if (fromAgent) {
+    const pre = h('pre', null, h('code', null, f.path));
+    const btn = h('button', { type: 'button', class: 'btn small copy', 'aria-label': 'Copy the full path of ' + f.name }, 'Copy path');
+    btn.addEventListener('click', async () => {
+      const ok = await copyText(f.path, pre);
+      btn.textContent = ok ? 'Copied' : 'Press Ctrl+C';
+      announce(ok ? 'Copied the path of ' + f.name : 'Could not copy automatically; the path is selected, press Control C');
+      setTimeout(() => { btn.textContent = 'Copy path'; }, 2200);
+    });
+    li.append(h('div', { class: 'fpath' }, pre, btn));
+  }
+  return li;
+}
+
+function patchFiles(card, t) {
+  card.querySelectorAll('.attach').forEach(z => {
+    const i = z.dataset.step === '' ? null : +z.dataset.step;
+    const list = filesFor(t, i);
+    const sig = JSON.stringify(list.map(f => [f.id, f.name, f.size, f.label]));
+    if (z.dataset.sig === sig) return;
+    z.dataset.sig = sig;
+    z.querySelector('.flist').replaceChildren(...list.map(f => fileRow(f, t)));
+  });
+}
+
+function attachZone(t, stepIdx, step) {
+  const id = t.id;
+  const open = t.status === 'open' || t.status === 'waiting';
+  const requested = step ? !!step.upload : !!t.upload;
+  const accept = step ? (step.accept || '') : (t.accept || '');
+  const label = step ? (step.label || '') : (t.upload_label || '');
+  const where = stepIdx == null ? 'this task' : 'step ' + (stepIdx + 1);
+  const zid = 'z-' + id + '-' + (stepIdx == null ? 't' : stepIdx);
+  const zone = h('div', { class: 'attach', dataset: { step: stepIdx == null ? '' : stepIdx } });
+  const ups = h('ul', { class: 'ups', 'aria-label': 'Uploads in progress' });
+  const flist = h('ul', { class: 'flist', 'aria-label': 'Files on ' + where });
+  const list = filesFor(t, stepIdx);
+  zone.dataset.sig = JSON.stringify(list.map(f => [f.id, f.name, f.size, f.label]));
+  flist.replaceChildren(...list.map(f => fileRow(f, t)));
+  zone.append(flist);                                     // existing files first, the picker below them
+  if (open && (stepIdx == null || requested)) {
+    const input = h('input', { type: 'file', multiple: true, class: 'sr', tabindex: '-1', 'aria-hidden': 'true', accept: accept || null });
+    const hintId = zid + '-hint';
+    const pick = h('button', { type: 'button', class: 'btn pick' + (requested ? ' primary' : ''), 'aria-describedby': hintId },
+      'Attach file', h('span', { class: 'sr' }, ' for ' + where + (label ? ': ' + label : '')));
+    pick.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => { const fs = [...input.files]; input.value = ''; enqueue(fs); });
+    const dz = h('div', { class: 'dz', role: 'group', 'aria-label': 'Attach files to ' + where },
+      pick, h('span', { class: 'dz-text', id: hintId },
+        requested && label ? [h('b', null, label), ' — '] : null,
+        'drop files here or press the button.', accept ? ' Accepted: ' + accept.split(',').join(', ') + '.' : '', ' Several files are fine.'));
+    ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
+    ['dragleave', 'dragend'].forEach(ev => dz.addEventListener(ev, e => { if (!dz.contains(e.relatedTarget)) dz.classList.remove('over'); }));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('over');
+      const items = [...(e.dataTransfer.items || [])];
+      const dirs = items.some(it => it.webkitGetAsEntry && it.webkitGetAsEntry() && it.webkitGetAsEntry().isDirectory);
+      if (dirs) { addError(null, 'Folders can’t be uploaded. Zip the folder first, then attach the zip.'); }
+      enqueue([...e.dataTransfer.files].filter(f => !dirs || f.size > 0 || f.type), true);
+    });
+    zone.append(dz, input, ups);
+    let chain = Promise.resolve();
+    const card = () => zone.closest('.card');
+    const bump = d => { const c = card(); if (c) c.dataset.uploading = String(Math.max(0, +(c.dataset.uploading || 0) + d)); };
+    function addError(name, msg) {
+      const row = h('li', { class: 'uprow' }, h('div', { class: 'fname' }, name || 'Upload'), h('p', { class: 'err', role: 'alert' }, msg));
+      const x = h('button', { type: 'button', class: 'btn small quiet' }, 'Dismiss');
+      x.addEventListener('click', () => { row.remove(); pick.focus(); });
+      row.append(h('div', { class: 'fact' }, x)); ups.append(row);
+    }
+    function enqueue(files, dropped) {
+      for (const f of files) {
+        if (dropped && !matchesAccept(f, accept)) { addError(f.name, 'Not an accepted type here (' + accept.split(',').join(', ') + '). Use the Files section at the bottom of the task for other files.'); continue; }
+        const row = h('li', { class: 'uprow' });
+        const nameEl = h('div', { class: 'fname' }, f.name);
+        const meta = h('div', { class: 'fmeta' }, 'Waiting… ' + fmtSize(f.size));
+        const bar = h('progress', { max: '100', value: '0', 'aria-label': 'Uploading ' + f.name });
+        const cancel = h('button', { type: 'button', class: 'btn small quiet', 'aria-label': 'Cancel upload of ' + f.name }, 'Cancel');
+        const ctl = { xhr: null, cancelled: false };
+        cancel.addEventListener('click', () => { ctl.cancelled = true; if (ctl.xhr) ctl.xhr.abort(); row.remove(); });
+        row.append(nameEl, meta, bar, h('div', { class: 'fact' }, cancel));
+        ups.append(row); bump(1);
+        chain = chain.then(async () => {
+          if (ctl.cancelled) return;
+          try {
+            await sendFile(id, stepIdx, f, ctl, p => {
+              bar.value = Math.round(p * 100);
+              meta.textContent = Math.round(p * 100) + '% · ' + fmtSize(Math.round(f.size * p)) + ' of ' + fmtSize(f.size);
+            });
+            row.remove(); announce('Uploaded ' + f.name); toast('Uploaded ' + f.name);
+            await load();
+          } catch (e) {
+            if (ctl.cancelled) return;
+            row.replaceChildren(h('div', { class: 'fname' }, f.name), h('p', { class: 'err', role: 'alert' }, 'Not uploaded: ' + e.message));
+            const x = h('button', { type: 'button', class: 'btn small quiet' }, 'Dismiss');
+            x.addEventListener('click', () => { row.remove(); pick.focus(); });
+            row.append(h('div', { class: 'fact' }, x));
+          } finally { bump(-1); }
+        });
+      }
+    }
+  }
+  if (stepIdx == null) {
+    const sec = h('section', { class: 'files-sec', 'aria-labelledby': 'files-h-' + id },
+      h('h4', { id: 'files-h-' + id }, 'Files'),
+      t.upload ? h('p', { class: 'ask' }, h('b', null, 'The agent asks for a file: '), t.upload_label || 'please attach it below.') : null,
+      zone);
+    return sec;
+  }
+  return zone;
+}
+
+async function sendFile(taskId, stepIdx, file, ctl, onProgress) {
+  let cfg = null;
+  try { cfg = await api('/api/config'); } catch (e) { /* the server will enforce its own limits */ }
+  if (cfg) {
+    if (file.size > cfg.max_upload) throw new Error(file.name + ' is ' + fmtSize(file.size) + '; the limit is ' + fmtSize(cfg.max_upload) + '.');
+    if (cfg.free_bytes != null && file.size + cfg.reserve_bytes > cfg.free_bytes)
+      throw new Error('Not enough disk space: the file is ' + fmtSize(file.size) + ' but only ' + fmtSize(Math.max(0, cfg.free_bytes - cfg.reserve_bytes)) + ' is free.');
+  }
+  const url = '/api/tasks/' + taskId + '/upload?name=' + encodeURIComponent(file.name) +
+    (file.type ? '&type=' + encodeURIComponent(file.type) : '') + (stepIdx != null ? '&step=' + stepIdx : '');
+  const once = () => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest(); ctl.xhr = xhr;
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.setRequestHeader('X-CSRF-Token', state.token);
+    xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    xhr.onload = () => {
+      let data = null; try { data = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
+      const err = new Error((data && data.error) || ('HTTP ' + xhr.status)); err.status = xhr.status; reject(err);
+    };
+    xhr.onerror = () => reject(new Error('the connection was lost or the server refused the file (it may be too large or the disk may be full)'));
+    xhr.ontimeout = () => reject(new Error('the upload timed out'));
+    xhr.onabort = () => reject(new Error('cancelled'));
+    xhr.send(file);                                        // a File is streamed from disk by the browser
+  });
+  try { return await once(); }
+  catch (e) {
+    if (e.status === 403) {                                // server restarted: token changed
+      const t = await fetch('/api/csrf', { cache: 'no-store' });
+      if (t.ok) { state.token = (await t.json()).token; return await once(); }
+    }
+    throw e;
+  }
+}
+
+function buildCard(t) {
+  const id = t.id;
+  const card = h('article', { class: 'card status-' + t.status, 'aria-labelledby': 'title-' + id, dataset: { id, sig: structSig(t) } });
+  const pchip = h('span', { class: 'pchip' }, h('span', { class: 'dot', 'aria-hidden': 'true' }), t.project);
+  pchip.firstChild.style.setProperty('--hue', hue(t.project));
+  const badges = h('span', { class: 'badges' });
+  if (t.status === 'done' || t.status === 'cancelled') badges.append(h('span', { class: 'badge st' }, t.status === 'done' ? 'Done' : 'Cancelled'));
+  if (t.minutes != null) badges.append(h('span', { class: 'badge' }, '~' + t.minutes + ' min'));
+  if (t.steps.length) badges.append(h('span', { class: 'badge progress' }, t.steps_done.length + ' of ' + t.steps.length + (t.steps.length === 1 ? ' step' : ' steps')));
+  card.append(h('div', { class: 'card-head' }, pchip, badges));
+  card.append(h('h3', { class: 'title', id: 'title-' + id, tabindex: '-1' }, t.title));
+  if (t.why) card.append(h('p', { class: 'why' }, t.why));
+  if (t.status === 'waiting' && t.waiting_on) card.append(h('p', { class: 'banner' }, h('b', null, 'Waiting on: '), t.waiting_on));
+
+  if (t.steps.length) {
+    const ol = h('ol', { class: 'steps', role: 'list' });
+    t.steps.forEach((s, i) => {
+      const cid = 's-' + id + '-' + i;
+      const cb = h('input', { type: 'checkbox', id: cid, dataset: { index: i } });
+      cb.checked = t.steps_done.includes(i);
+      cb.addEventListener('change', () => toggleStep(id, i, cb));
+      const li = h('li', { class: cb.checked ? 'is-done' : '' },
+        h('div', { class: 'step-main' }, cb, h('label', { for: cid, class: 'step-text' }, s.text)),
+        s.link ? linkEl(s.link) : null,
+        s.value != null && s.value !== '' ? valueBlock(s.value, i + 1) : null,
+        (s.upload || t.files.some(f => f.step_index === i)) ? attachZone(t, i, s) : null);
+      ol.append(li);
+    });
+    card.append(ol);
+  }
+
+  // files not tied to a step (or tied to a step that no longer exists)
+  const open = t.status === 'open' || t.status === 'waiting';
+  if (open || t.files.some(f => f.step_index == null || f.step_index >= t.steps.length) || t.upload) card.append(attachZone(t, null, null));
+
+  // note for the agent
+  const taId = 'note-' + id;
+  const ta = h('textarea', { id: taId, rows: '3', 'aria-describedby': 'ns-' + id });
+  ta.value = t.note || ''; ta.dataset.saved = ta.value;
+  const stateEl = h('span', { class: 'save-state', id: 'ns-' + id, role: 'status' }, '');
+  const hint = h('span', null, 'Saves when you leave the box, or press Ctrl+Enter.');
+  let saving = null;
+  const save = async () => {
+    if (ta.value === ta.dataset.saved) return;
+    const val = ta.value;
+    stateEl.className = 'save-state'; stateEl.textContent = 'Saving…';
+    try {
+      const r = await api('/api/tasks/' + id + '/note', { note: val });
+      ta.dataset.saved = val;
+      if (ta.value === val) { stateEl.className = 'save-state ok'; stateEl.textContent = 'Saved'; }
+      else { stateEl.className = 'save-state'; stateEl.textContent = 'Unsaved changes'; }
+      const mine = state.tasks.find(x => x.id === id); if (mine) { mine.note = r.task.note; mine.note_at = r.task.note_at; mine.updated_at = r.task.updated_at; }
+    } catch (e) {
+      stateEl.className = 'save-state err'; stateEl.textContent = 'Not saved: ' + e.message + ' (will retry when you leave the box)';
+    }
+  };
+  ta.addEventListener('blur', () => { saving = save(); });
+  ta.addEventListener('input', () => { stateEl.className = 'save-state'; stateEl.textContent = ta.value === ta.dataset.saved ? '' : 'Unsaved changes'; });
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); } });
+  card.append(h('div', { class: 'note' }, h('label', { for: taId }, 'Note for the agent'), ta, h('div', { class: 'note-foot' }, hint, stateEl)));
+
+  // actions
+  const actions = h('div', { class: 'actions' });
+  const act = (label, cls, status, confirmMsg) => {
+    const b = h('button', { type: 'button', class: 'btn ' + cls }, label);
+    b.setAttribute('aria-label', label + ': ' + t.title);
+    b.addEventListener('click', () => {
+      if (confirmMsg && !window.confirm(confirmMsg)) return;
+      setStatus(card, id, status, label, b);
+    });
+    return b;
+  };
+  if (t.status === 'open') actions.append(act('Mark done', 'primary', 'done'), act('Cancel task', 'quiet', 'cancelled', 'Cancel this task? The agent will see it as cancelled.'));
+  else if (t.status === 'waiting') actions.append(act('Mark done', 'primary', 'done'), act('Move to To do', '', 'open'), act('Cancel task', 'quiet', 'cancelled', 'Cancel this task? The agent will see it as cancelled.'));
+  else actions.append(act('Reopen', 'primary', 'open'));
+  card.append(actions);
+
+  const foot = h('p', { class: 'foot' }, 'Added ', timeEl(t.created_at), t.created_by ? ' by ' + t.created_by : '');
+  if (t.done_at) foot.append(' · ' + (t.status === 'cancelled' ? 'cancelled ' : 'done '), timeEl(t.done_at));
+  foot.append(' · ID ', h('code', null, t.id));
+  if (t.key) foot.append(' · key ', h('code', null, t.key));
+  card.append(foot);
+  return card;
+}
+
+// ---------- actions ----------
+async function toggleStep(id, i, cb) {
+  const want = cb.checked;
+  cb.dataset.busy = '1';
+  cb.closest('li').classList.toggle('is-done', want);
+  try {
+    await api('/api/tasks/' + id + '/step', { index: i, done: want });
+    announce('Step ' + (i + 1) + (want ? ' ticked' : ' unticked'));
+    delete cb.dataset.busy;
+    await load();
+  } catch (e) {
+    delete cb.dataset.busy;
+    cb.checked = !want; cb.closest('li').classList.toggle('is-done', !want);
+    announce('Could not save: ' + e.message);
+    $conn.textContent = 'Could not save: ' + e.message;
+    setTimeout(() => { if (!wasOffline) $conn.textContent = ''; }, 6000);
+  }
+}
+
+async function setStatus(card, id, status, label, btn) {
+  const neighbour = card.nextElementSibling || card.previousElementSibling;
+  const hadFocus = card.contains(document.activeElement);
+  btn.disabled = true;
+  try {
+    const r = await api('/api/tasks/' + id + '/status', { status });
+    const sentence = { done: 'Done', cancelled: 'Cancelled', open: 'Reopened' }[status] || label;
+    toast(r.notified ? sentence + ' — the agent has been notified' : sentence);
+    await load();
+    if (hadFocus || document.activeElement === document.body) {
+      const target = (neighbour && neighbour.isConnected && neighbour.querySelector('h3')) || $listH;
+      target.focus();
+    }
+  } catch (e) {
+    btn.disabled = false;
+    announce('Could not update: ' + e.message);
+    $conn.textContent = 'Could not update: ' + e.message;
+    setTimeout(() => { if (!wasOffline) $conn.textContent = ''; }, 6000);
+  }
+}
+
+// ---------- boot ----------
+for (const ev of ['dragover', 'drop']) window.addEventListener(ev, e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+window.addEventListener('hashchange', render);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+setInterval(() => { if (!document.hidden) poll(); }, 5000);
+setInterval(() => { /* keep the "x min ago" labels fresh for idle cards */
+  document.querySelectorAll('.foot time').forEach(el => { if (!isBusy(el.closest('.card'))) el.textContent = ago(el.getAttribute('datetime')); });
+}, 60000);
+$list.addEventListener('focusout', () => { setTimeout(render, 700); });
+load().catch(e => { setConn(false); $empty.hidden = false; $empty.textContent = 'Could not load tasks: ' + e.message; });
+})();
+</script>
+</body>
+</html>

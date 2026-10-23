@@ -1,0 +1,2 @@
+# kept out of `git archive` exports (the public tree)
+/scripts/ export-ignore

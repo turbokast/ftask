@@ -225,5 +225,59 @@ class HttpHookTests(TempDbCase):
         self.assertTrue(j["listeners"]["notify_cmd"])
 
 
+class OwnerTests(TempDbCase):
+    """Agent-side events remember the agent's pane/session/folder; human hooks receive it as FTASK_OWNER."""
+
+    def setUp(self):
+        super().setUp()
+        self.out = self.tmp / "out"
+        self.out.mkdir()
+        self.saved = {k: os.environ.get(k) for k in hooks.OWNER_ENV.values()}
+        for k in self.saved:
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        super().tearDown()
+
+    def write_hook(self, name, body):
+        p = self.hooks_dir / name
+        p.write_text("#!/bin/sh\n" + body + "\n")
+        p.chmod(0o755)
+
+    def owner(self, key):
+        s = st.Store(self.db)
+        tid = s.get(key)["id"]
+        row = s._conn().execute("SELECT context FROM owners WHERE task_id=?", (tid,)).fetchone()
+        return json.loads(row["context"]) if row else None
+
+    def test_agent_event_records_owner_and_hook_gets_it(self):
+        os.environ["HERDR_PANE_ID"] = "w9:p1"
+        os.environ["CLAUDE_CODE_SESSION_ID"] = "sess-1"
+        s = st.Store(self.db)
+        s.upsert({"project": "Shop", "title": "Pay", "key": "o/k"}, actor="agent")
+        self.assertEqual((self.owner("o/k")["herdr_pane"], self.owner("o/k")["claude_session"]), ("w9:p1", "sess-1"))
+        self.assertIn("cwd", self.owner("o/k"))
+        os.environ["HERDR_PANE_ID"] = "w9:p2"   # a later agent touching the task becomes its owner
+        s.set_note("o/k", "agent note", actor="agent")
+        self.assertEqual(self.owner("o/k")["herdr_pane"], "w9:p2")
+        for k in hooks.OWNER_ENV.values():       # the web UI process has no agent context
+            os.environ.pop(k, None)
+        self.write_hook("on-any", f'printf "%s" "$FTASK_OWNER" > "{self.out}/owner.$FTASK_SEQ"')
+        s.set_note("o/k", "human reply", actor="founder")
+        f = eventually(lambda: sorted(self.out.iterdir()))[0]
+        self.assertEqual(json.loads(f.read_text())["herdr_pane"], "w9:p2")
+        self.assertEqual(self.owner("o/k")["herdr_pane"], "w9:p2")   # human events never change the owner
+
+    def test_no_agent_context_records_nothing(self):
+        s = st.Store(self.db)
+        s.upsert({"project": "Shop", "title": "Pay", "key": "o/n"}, actor="agent")
+        self.assertIsNone(self.owner("o/n"))
+
+
 if __name__ == "__main__":
     unittest.main()

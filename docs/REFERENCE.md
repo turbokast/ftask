@@ -80,17 +80,60 @@ created_at, label, direction) and logged as events (`upload`, `attached`, `detac
    (negligible CPU) and registers itself so the UI knows someone is listening.
 2. **Hooks**: executables `on-done`, `on-note`, `on-upload`, `on-any` in `<config dir>/hooks/`, run by whichever
    process recorded the event (UI server or CLI), detached so nothing waits for them. stdin is the event JSON; env
-   `FTASK_ID FTASK_KEY FTASK_EVENT FTASK_PROJECT FTASK_TITLE FTASK_SEQ FTASK_DB`. 30 s limit (`FTASK_HOOK_TIMEOUT`), killed
+   `FTASK_ID FTASK_KEY FTASK_EVENT FTASK_PROJECT FTASK_TITLE FTASK_SEQ FTASK_DB FTASK_OWNER` (the last is the agent that owns the task, see [below](#push-human-replies-to-the-agent-that-owns-the-task)). 30 s limit (`FTASK_HOOK_TIMEOUT`), killed
    after that; output and exit codes go to `<data dir>/hooks.log`. Events recorded from inside a hook
    never trigger hooks (no loops). Hooks only run for the real database (or when `FTASK_HOOKS_DIR` is set), so tests with a
-   temporary `FTASK_DB` never fire them. Example (not installed): `docs/hooks/on-any.example` shows a `notify-send` desktop
-   notification.
+   temporary `FTASK_DB` never fire them. Examples (not installed): `docs/hooks/on-any.example` shows a `notify-send` desktop
+   notification; `docs/hooks/on-any.herdr-push.example` pushes the reply to the agent's terminal.
 3. **`--notify-cmd "CMD"`** (JSON `notify_cmd`) stores a command on one task; the same runner executes it for that task's
    human events, with the same stdin/env/time limit/log. **It runs arbitrary shell commands as your user**, so only agents
    on this machine should set it, and the UI cannot. Clear it with `--notify-cmd ""`.
 
 After "Mark done" / "Cancel task" the UI says "Done — the agent has been notified" only if a matching waiter, hook or
 notify-cmd exists; otherwise just "Done".
+
+## Push human replies to the agent that owns the task
+
+Recording: whenever an agent-side event is recorded (an actor other than the human), ftask stores the agent context of that
+process for the task in the `owners` table (database migration v3), replacing the previous one, so the owner is the agent
+that last acted on the task. The context is taken from these environment variables, and only the ones that are set:
+
+| Key in `FTASK_OWNER` | Environment variable |
+| --- | --- |
+| `herdr_pane`, `herdr_socket`, `herdr_workspace` | `HERDR_PANE_ID`, `HERDR_SOCKET_PATH`, `HERDR_WORKSPACE_ID` |
+| `claude_session` | `CLAUDE_CODE_SESSION_ID` |
+| `codex_thread` | `CODEX_THREAD_ID` |
+| `ai_agent` | `AI_AGENT` |
+| `cwd` | the working directory (only recorded together with at least one of the above) |
+
+If none of those variables is set, nothing is recorded. Human events never change the owner. Hooks and `--notify-cmd` commands
+for a human event receive the owner as the environment variable `FTASK_OWNER`, a JSON object (`{}` when unknown), in addition
+to the variables listed above. It is local data and is never sent anywhere by ftask itself.
+
+Two example hooks use it (copy and edit them; they are not installed by default):
+
+* `docs/hooks/on-any.herdr-push.example` (install as `<config dir>/hooks/on-any`). Merges events that arrive together,
+  skips bare step ticks, then delivers one message: `herdr agent prompt <pane> <text>` to the owner's pane if `herdr` is installed
+  and an agent is still running there (otherwise to an agent in the same folder, idle first), else a JSON line appended to
+  `inbox.jsonl` in the database's directory. Environment: `FTASK_INBOX` / `FTASK_INBOX_DIR` (inbox location),
+  `FTASK_PUSH_SETTLE` (seconds to wait for follow-up events, default 4), `HERDR_BIN_PATH`.
+* `docs/hooks/inbox-hook.example` (any path, e.g. `<config dir>/inbox-hook`). A Claude Code / Codex hook for `SessionStart`
+  and `UserPromptSubmit` that prints the queued entries belonging to the current session (matching session id or folder) as
+  additional context, then moves them to `inbox.done.jsonl` so each is shown once. It never fails the agent.
+
+Claude Code (`~/.claude/settings.json`) and Codex (`~/.codex/hooks.json`, with `[features] hooks = true` in
+`~/.codex/config.toml`) take the same hook block for the inbox hook:
+
+```json
+{
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "/home/you/.config/ftask/inbox-hook", "timeout": 10 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/home/you/.config/ftask/inbox-hook", "timeout": 10 }] }]
+  }
+}
+```
+
+The pushed message tells the agent to run `ftask show <id>` and act on the reply.
 
 ## Web UI
 

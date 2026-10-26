@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Example Claude Code / Codex hook (SessionStart and UserPromptSubmit): show human replies that could not be pushed.
+
+NOT installed by default. Companion of on-any.herdr-push.example: when no agent was running in the task owner's pane or
+folder, that hook queues the reply in inbox.jsonl. This hook prints the entries that belong to the current session
+(same Claude session / Codex thread id, or the session's folder is the owner's folder or inside it) as extra context
+for the agent, then moves them to inbox.done.jsonl so each is shown once. It never fails the agent.
+
+Install:
+    mkdir -p ~/.config/ftask
+    cp docs/hooks/inbox-hook.example ~/.config/ftask/inbox-hook && chmod +x ~/.config/ftask/inbox-hook
+then register it for SessionStart and UserPromptSubmit (snippets in README.md, "Push human replies to the agent").
+
+The inbox directory is the one that holds your database (`ftask path`), or $FTASK_INBOX_DIR / $FTASK_INBOX if set (set
+the same value for the on-any hook). Hook stdin is the agent's hook JSON; "cwd" and "session_id" are used when present.
+"""
+import fcntl
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def state_dir() -> Path:
+    if os.environ.get("FTASK_INBOX_DIR"):
+        return Path(os.environ["FTASK_INBOX_DIR"])
+    if os.environ.get("FTASK_DB"):
+        return Path(os.environ["FTASK_DB"]).parent
+    exe = shutil.which("ftask")
+    if exe:
+        try:
+            out = subprocess.run([exe, "path"], capture_output=True, text=True, timeout=5).stdout.strip()
+            if out:
+                return Path(out).parent
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if sys.platform == "darwin":
+        return Path.home() / "Library/Application Support/ftask"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "ftask"
+
+
+STATE = state_dir()
+INBOX = Path(os.environ.get("FTASK_INBOX") or STATE / "inbox.jsonl")
+DONE = INBOX.with_name("inbox.done.jsonl")
+
+
+def mine(rec, cwd, sid):
+    if sid and sid in (rec.get("claude_session"), rec.get("codex_thread")):
+        return True
+    oc = (rec.get("cwd") or "").rstrip("/")
+    return bool(oc) and (cwd == oc or cwd.startswith(oc + "/") or oc.startswith(cwd.rstrip("/") + "/"))
+
+
+def main():
+    try:
+        hook = json.load(sys.stdin)
+    except ValueError:
+        hook = {}
+    cwd = (hook.get("cwd") or os.getcwd()).rstrip("/")
+    sid = hook.get("session_id") or os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CODEX_THREAD_ID") or ""
+    if not INBOX.exists():
+        return
+    with INBOX.open("r+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        recs = [json.loads(line) for line in f if line.strip()]
+        take = [r for r in recs if mine(r, cwd, sid)]
+        if not take:
+            return
+        keep = [r for r in recs if r not in take]
+        f.seek(0)
+        f.truncate()
+        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in keep)
+    with DONE.open("a") as d:
+        d.writelines(json.dumps({**r, "shown_to": sid or cwd}, ensure_ascii=False) + "\n" for r in take)
+    text = "Replies from the human on your ftask board that you have not seen yet:\n" + "\n".join(
+        "- " + r["text"] for r in take)
+    event = hook.get("hook_event_name") or "SessionStart"
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:  # a hook must never break the session
+        print("ftask inbox hook error: %s" % e, file=sys.stderr)

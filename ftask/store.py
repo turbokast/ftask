@@ -186,6 +186,15 @@ MIGRATIONS = [
         created_at TEXT NOT NULL
     );
     """,
+    # v3: who last acted on a task from the agent side (terminal pane, session, folder), so human events
+    # can be pushed back to that agent (see hooks.owner_context and the FTASK_OWNER hook variable)
+    """
+    CREATE TABLE owners (
+        task_id  TEXT PRIMARY KEY,
+        context  TEXT NOT NULL DEFAULT '{}',
+        at       TEXT NOT NULL
+    );
+    """,
 ]
 
 

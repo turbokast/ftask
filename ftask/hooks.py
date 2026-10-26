@@ -17,6 +17,7 @@ import json
 import os
 import pwd
 import signal
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -92,14 +93,56 @@ def is_human_event(ev) -> bool:
 # recording side: decide whether anything needs to run, then spawn the runner
 # --------------------------------------------------------------------------
 
+OWNER_ENV = {  # environment variables that identify the agent that ran an ftask command
+    "herdr_pane": "HERDR_PANE_ID", "herdr_socket": "HERDR_SOCKET_PATH", "herdr_workspace": "HERDR_WORKSPACE_ID",
+    "claude_session": "CLAUDE_CODE_SESSION_ID", "codex_thread": "CODEX_THREAD_ID", "ai_agent": "AI_AGENT",
+}
+
+
+def owner_context() -> dict:
+    """Where the current (agent-side) ftask command runs from; {} when nothing identifies an agent."""
+    ctx = {k: os.environ[v] for k, v in OWNER_ENV.items() if os.environ.get(v)}
+    if not ctx:
+        return {}
+    try:
+        ctx["cwd"] = os.getcwd()
+    except OSError:
+        pass
+    return ctx
+
+
+def record_owners(conn, rows) -> None:
+    """Remember the agent context of the last agent-side event on each task (best effort)."""
+    ctx = owner_context()
+    if not ctx:
+        return
+    from .store import now
+    tids = sorted({r["task_id"] for r in rows if r["actor"] != HUMAN})
+    if not tids:
+        return
+    blob = json.dumps(ctx, ensure_ascii=False)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for t in tids:
+            conn.execute("INSERT INTO owners(task_id, context, at) VALUES(?,?,?) "
+                         "ON CONFLICT(task_id) DO UPDATE SET context=excluded.context, at=excluded.at", (t, blob, now()))
+        conn.execute("COMMIT")
+    except sqlite3.Error:
+        try:
+            conn.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+
+
 def after_commit(conn, seqs) -> None:
     if os.environ.get("FTASK_IN_HOOK"):  # events recorded by a hook never trigger hooks (no loops)
         return
     db_path = conn.db_path
     marks = ",".join("?" * len(seqs))
     rows = conn.execute(
-        f"SELECT e.seq, e.kind, e.actor, t.notify_cmd FROM events e LEFT JOIN tasks t ON t.id=e.task_id "
+        f"SELECT e.seq, e.task_id, e.kind, e.actor, t.notify_cmd FROM events e LEFT JOIN tasks t ON t.id=e.task_id "
         f"WHERE e.seq IN ({marks}) ORDER BY e.seq", list(seqs)).fetchall()
+    record_owners(conn, rows)
     todo = []
     for r in rows:
         ev = {"actor": r["actor"], "kind": r["kind"]}
@@ -242,13 +285,17 @@ def run_events(db_path, seqs) -> int:
                 continue
             row = conn.execute("SELECT notify_cmd FROM tasks WHERE id=?", (ev["task_id"],)).fetchone()
             notify[seq] = (row["notify_cmd"] if row else "") or ""
+            own = conn.execute("SELECT context FROM owners WHERE task_id=?", (ev["task_id"],)).fetchone()
+            ev["_owner"] = own["context"] if own else ""
             events.append(ev)
     finally:
         conn.close()
     timeout = hook_timeout()
     for ev in events:
+        owner = ev.pop("_owner", "")
         payload = json.dumps(ev, ensure_ascii=False).encode("utf-8")
         env = _child_env(db_path, ev)
+        env["FTASK_OWNER"] = owner or "{}"
         for hook in hook_files(db_path, ev["kind"]):
             _run_one(db_path, hook.name, [str(hook)], payload, env, timeout)
         cmd = notify.get(ev["seq"])

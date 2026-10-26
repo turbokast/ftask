@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Example ftask hook: push the human's actions on a task back to the agent that owns it.
+
+NOT installed by default. Install it as the `on-any` hook (Linux; on macOS use
+~/Library/Application Support/ftask/hooks):
+
+    mkdir -p ~/.config/ftask/hooks
+    cp docs/hooks/on-any.herdr-push.example ~/.config/ftask/hooks/on-any
+    chmod +x ~/.config/ftask/hooks/on-any
+
+ftask runs it for every human event (done, cancelled, reopened, note, step, upload) with the event JSON on stdin and
+  FTASK_OWNER  JSON describing the agent that last acted on the task from the agent side, recorded automatically:
+               {"herdr_pane": ..., "herdr_socket": ..., "claude_session": ..., "codex_thread": ..., "cwd": ...}
+               (only the keys that were present in the agent's environment; "{}" if nothing identified an agent).
+plus FTASK_DB, FTASK_KEY, FTASK_TITLE, FTASK_EVENT and friends.
+
+Delivery, in order:
+  1. If `herdr` (https://herdr.dev) is installed and an agent is still running in the owner's pane (or, failing that,
+     in the owner's folder), send it a prompt with `herdr agent prompt <pane> <text>`.
+  2. Otherwise append a JSON line to an inbox file (default: inbox.jsonl next to the database, or $FTASK_INBOX).
+     Pair it with inbox-hook.example, which shows queued messages when a Claude Code or Codex session starts or the
+     next prompt is submitted, so a closed or restarted session still hears about it.
+
+Ticked steps alone are not pushed (too noisy); they are included when a later event on the task is pushed. Events that
+arrive together (a note, then Done) are merged into one message after a short pause (FTASK_PUSH_SETTLE seconds).
+Without herdr the script still works: everything goes to the inbox. Output goes to ftask's hooks.log.
+"""
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DB = os.environ.get("FTASK_DB", "")
+STATE = Path(os.environ.get("FTASK_INBOX_DIR") or (Path(DB).parent if DB else Path.home() / ".local/state/ftask"))
+INBOX = Path(os.environ.get("FTASK_INBOX") or STATE / "inbox.jsonl")
+DELIVERED = STATE / "inbox.delivered.json"
+SETTLE = float(os.environ.get("FTASK_PUSH_SETTLE", "4"))  # seconds to wait for follow-up events on the same task
+PUSH_KINDS = {"done", "cancelled", "reopened", "note", "upload"}
+HUMAN = "founder"  # the stored actor value for events made in the web UI (shown as "human" in ftask output)
+
+
+def herdr(*args, socket=None):
+    env = dict(os.environ)
+    if socket:
+        env["HERDR_SOCKET_PATH"] = socket
+    exe = os.environ.get("HERDR_BIN_PATH") or shutil.which("herdr")
+    if not exe:
+        raise FileNotFoundError("herdr is not installed")
+    return subprocess.run([exe, *args], capture_output=True, text=True, timeout=15, env=env)
+
+
+def live_agents(socket):
+    try:
+        r = herdr("agent", "list", socket=socket)
+        return json.loads(r.stdout)["result"]["agents"] if r.returncode == 0 else []
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        return []
+
+
+def human_events(task_id, after):
+    con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=5)
+    try:
+        return con.execute("SELECT seq, kind, detail FROM events WHERE task_id=? AND actor=? AND seq>? ORDER BY seq",
+                           (task_id, HUMAN, after)).fetchall()
+    finally:
+        con.close()
+
+
+def describe(kind, detail):
+    d = json.loads(detail or "{}")
+    if kind == "note":
+        return 'wrote a note: "%s"' % (d.get("note") or "").strip()
+    if kind == "step":
+        return "%s step %s" % ("ticked" if d.get("done", True) else "unticked", (d.get("index", -1) + 1) or "?")
+    if kind == "upload":
+        return "uploaded a file (%s)" % (d.get("name") or "see `ftask files`")
+    return {"done": "marked it done", "cancelled": "cancelled it", "reopened": "reopened it"}.get(kind, kind)
+
+
+def main():
+    ev = json.load(sys.stdin)
+    if ev.get("kind") not in PUSH_KINDS:
+        print("skip: %s events are not pushed on their own" % ev.get("kind"))
+        return
+    tid, seq = ev["task_id"], int(ev["seq"])
+    time.sleep(SETTLE)
+    STATE.mkdir(parents=True, exist_ok=True)
+    delivered = json.loads(DELIVERED.read_text()) if DELIVERED.exists() else {}
+    evs = human_events(tid, delivered.get(tid, 0))
+    if not evs or any(s > seq and k in PUSH_KINDS for s, k, _ in evs):
+        print("skip: a later event on this task will carry this one")
+        return
+    owner = json.loads(os.environ.get("FTASK_OWNER") or "{}")
+    key = os.environ.get("FTASK_KEY") or tid
+    text = ("[ftask] The human %s on your task %s (%s, id %s). Run `ftask show %s` and act on it; "
+            "this is their answer, not a request to re-ask." % (
+                "; then ".join(describe(k, d) for _, k, d in evs), key, os.environ.get("FTASK_TITLE", ""), tid, tid))
+
+    sent_to = None
+    socket = owner.get("herdr_socket")
+    live = live_agents(socket)
+    target = next((a for a in live if a.get("pane_id") == owner.get("herdr_pane")), None)
+    if target is None and owner.get("cwd"):  # the pane is gone: any agent in the same folder, idle ones first
+        same = [a for a in live if owner["cwd"] in (a.get("cwd"), a.get("foreground_cwd"))]
+        same.sort(key=lambda a: a.get("agent_status") != "idle")
+        target = same[0] if same else None
+    if target is not None:
+        try:
+            r = herdr("agent", "prompt", target["pane_id"], text, socket=socket)
+            if r.returncode == 0:
+                sent_to = target["pane_id"]
+            else:
+                print("herdr prompt failed: %s" % (r.stderr or r.stdout).strip()[:300])
+        except (OSError, subprocess.SubprocessError) as e:
+            print("herdr prompt failed: %s" % e)
+    if sent_to is None:
+        rec = {"seq": seq, "task_id": tid, "key": key, "text": text, "cwd": owner.get("cwd", ""),
+               "claude_session": owner.get("claude_session", ""), "codex_thread": owner.get("codex_thread", ""),
+               "at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+        INBOX.parent.mkdir(parents=True, exist_ok=True)
+        with INBOX.open("a") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    delivered[tid] = max(s for s, _, _ in evs)
+    tmp = DELIVERED.with_suffix(".tmp")
+    tmp.write_text(json.dumps(delivered))
+    tmp.replace(DELIVERED)
+    print("pushed to herdr pane %s" % sent_to if sent_to else "no live agent; queued in %s" % INBOX)
+
+
+if __name__ == "__main__":
+    main()

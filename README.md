@@ -7,11 +7,11 @@ usually write a paragraph in chat and stall. With ftask the agent instead drops 
 the text to paste (with a Copy button), the exact link to open, files to download, files it needs back from you. You tick
 through it in a browser; the moment you press **Done**, the agent is woken up and carries on.
 
-![Demo: an agent adds a task and waits; the person ticks the steps, writes a note and presses Mark done; the agent is woken with the note](docs/media/demo.gif)
+![Demo: an agent adds a task and waits; the person ticks the steps, writes a note and presses Mark done; the agent is woken with the note](https://raw.githubusercontent.com/turbokast/ftask/main/docs/media/demo.gif)
 
 *The agent waits; you finish the job; the agent carries on. (Demo data on a throwaway board.)*
 
-![The ftask board: a task with three steps, a Copy button next to the value, and Mark done](docs/media/board.png)
+![The ftask board: a task with three steps, a Copy button next to the value, and Mark done](https://raw.githubusercontent.com/turbokast/ftask/main/docs/media/board.png)
 
 
 ```
@@ -59,7 +59,7 @@ Everything is also available as JSON (`--json`) and every command works from a s
 
 ## Set up your agent
 
-`ftask snippet` prints ready-made instructions (also in [`ftask/AGENTS-SNIPPET.md`](ftask/AGENTS-SNIPPET.md)). Append them to the
+`ftask snippet` prints ready-made instructions (also in [`ftask/AGENTS-SNIPPET.md`](https://github.com/turbokast/ftask/blob/main/ftask/AGENTS-SNIPPET.md)). Append them to the
 `AGENTS.md` (Codex and most other agents) or `CLAUDE.md` (Claude Code) of any project, or to your global
 `~/.claude/CLAUDE.md`.
 
@@ -77,7 +77,7 @@ when the command exits, which is when you click Done.
 * **Agent side**: `ftask wait` (above). Exit code 124 on `--timeout`; it prints a `cursor:` so the next wait misses nothing.
 * **Human side**: drop executables in `on-done`, `on-note`, `on-upload` or `on-any` in the hooks directory (below) to get a
   desktop notification, a message to a webhook, anything. A ready example for Linux `notify-send` and macOS is in
-  [`docs/hooks/on-any.example`](docs/hooks/on-any.example).
+  [`docs/hooks/on-any.example`](https://github.com/turbokast/ftask/blob/main/docs/hooks/on-any.example).
 
 ## Push human replies to the agent that owns the task
 
@@ -88,9 +88,9 @@ ftask remembers who created or last touched each task and hands that to your hoo
   (`HERDR_PANE_ID`), the Claude Code session (`CLAUDE_CODE_SESSION_ID`), the Codex thread (`CODEX_THREAD_ID`) and the folder.
   Nothing is recorded when none of those are set. It stays in your local database.
 * Hooks for human events receive it as `FTASK_OWNER` (JSON, `{}` if unknown). Human events never change the owner.
-* [`docs/hooks/on-any.herdr-push.example`](docs/hooks/on-any.herdr-push.example) uses it: it sends the reply straight into the
+* [`docs/hooks/on-any.herdr-push.example`](https://github.com/turbokast/ftask/blob/main/docs/hooks/on-any.herdr-push.example) uses it: it sends the reply straight into the
   owner's terminal with `herdr agent prompt` if an agent is still running there, otherwise it appends the reply to an inbox file.
-* [`docs/hooks/inbox-hook.example`](docs/hooks/inbox-hook.example) shows queued replies to Claude Code or Codex when a session
+* [`docs/hooks/inbox-hook.example`](https://github.com/turbokast/ftask/blob/main/docs/hooks/inbox-hook.example) shows queued replies to Claude Code or Codex when a session
   starts or you send the next prompt, so a restarted session still hears about it.
 
 ```sh
@@ -124,7 +124,7 @@ Codex, `~/.codex/hooks.json` (same shape; hooks must be enabled with `[features]
 
 Without herdr the on-any example still works: every reply goes to the inbox and the hooks above deliver it. Ticked steps are
 not pushed on their own; they ride along with the next note, upload or Done. Details in
-[docs/REFERENCE.md](docs/REFERENCE.md#push-human-replies-to-the-agent-that-owns-the-task).
+[docs/REFERENCE.md](https://github.com/turbokast/ftask/blob/main/docs/REFERENCE.md#push-human-replies-to-the-agent-that-owns-the-task).
 
 ## Keep it running
 
@@ -152,11 +152,11 @@ consistent copy.
 There is no login, so the board binds `127.0.0.1` only and refuses foreign `Host` headers (DNS rebinding), cross-origin or
 token-less writes, and path traversal in uploads. Do not put it on a network. Tasks can only be created through the CLI, never
 over HTTP. `--notify-cmd` and hooks run shell commands as your user, so only your own agents should set them. Details in
-[docs/REFERENCE.md](docs/REFERENCE.md#web-ui).
+[docs/REFERENCE.md](https://github.com/turbokast/ftask/blob/main/docs/REFERENCE.md#web-ui).
 
 ## More
 
-* [docs/REFERENCE.md](docs/REFERENCE.md): every command, the data model, files, hooks, the JSON API, backup.
+* [docs/REFERENCE.md](https://github.com/turbokast/ftask/blob/main/docs/REFERENCE.md): every command, the data model, files, hooks, the JSON API, backup.
 * `ftask --help`, `ftask <command> --help`: examples for each command.
 * Tests: `python3 -m unittest discover -s tests` (about a minute; uses temporary databases only).
 
